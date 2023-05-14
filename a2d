@@ -1,0 +1,116 @@
+//own iot cloud data logging
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
+
+//Adafruit_ADS1015 ads1015;  // Construct an ads1015
+Adafruit_ADS1115 ads1115;  // Construct an ads1115
+
+float Voltage = 0.0;
+float Do = 0.0;
+
+const char* ssid = "Printer";   // your network SSID (name) 
+const char* password = "123456780";   // your network password
+
+// Domain Name with full URL Path for HTTP POST Request
+const char* serverName = "http://baring-incline.000webhostapp.com/esp-post-data.php";
+
+String my_Api_key = "tPmAT5Ab3j7F9";
+String sensorName = "DO_SENSOR";
+String sensorLocation = "Office";
+
+unsigned long last_time = 0;
+// Set timer to 60 seconds (60000)
+unsigned long timer_delay = 60000;
+
+void setup()
+{
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting");
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
+  //adc data showning
+  Serial.println("Hello!");
+  Serial.println("Getting single-ended readings from AIN0..3");
+  Serial.println("ADC Range: +/- 6.144V (1 bit = 3mV)");
+  ads1115.begin(); //ads1115 with default address 0x48
+  Serial.println("Timer set to 30 seconds (timer_delay variable), it will take 30 seconds before publishing the first reading.");
+
+}
+
+void loop()
+{
+  //int16_t adc0, adc1, adc2, adc3;
+  int16_t adc0;
+  adc0 = ads1115.readADC_SingleEnded(0);
+  Voltage = (adc0 * 0.1875) / 1000;
+  Do=Voltage*6;
+  delay(1000);
+//
+//Send an HTTP POST request every 10 minutes
+  if ((millis()-last_time) > timer_delay) {
+    //Check WiFi connection status
+    if(WiFi.status()== WL_CONNECTED){
+      WiFiClient client;
+      HTTPClient http;
+
+      // Your Domain name with URL path or IP address with path
+      http.begin(client, serverName);
+
+      // Specify content-type header
+      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+      // Prepare your HTTP POST request data
+      String httpRequestData = "api_key=" + my_Api_key + "&sensor=" + sensorName
+                            + "&location=" + sensorLocation + "&value1=" + String(Voltage)
+                            + "&value2=" + String(Do) + "&value3=" + String(50) + "";
+      Serial.print("httpRequestData: ");
+      Serial.println(httpRequestData);
+
+      // You can comment the httpRequestData variable above
+      // then, use the httpRequestData variable below (for testing purposes without the BME280 sensor)
+      //String httpRequestData = "api_key=tPmAT5Ab3j7F9&sensor=BME280&location=Office&value1=24.75&value2=49.54&value3=1005.14";
+
+      // Send HTTP POST request
+      int httpResponseCode = http.POST(httpRequestData);
+
+      // If you need an HTTP request with a content type: text/plain
+      //http.addHeader("Content-Type", "text/plain");
+      //int httpResponseCode = http.POST("Hello, World!");
+
+      // If you need an HTTP request with a content type: application/json, use the following:
+      //http.addHeader("Content-Type", "application/json");
+      //int httpResponseCode = http.POST("{\"value1\":\"19\",\"value2\":\"67\",\"value3\":\"78\"}");
+
+      if (httpResponseCode>0) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+      }
+      else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+      }
+      // Free resources
+      http.end();
+    }
+    else {
+      Serial.println("WiFi Disconnected");
+    }
+    last_time = millis();
+  }
+  //
+  Serial.print("AIN0: "); Serial.println(adc0);
+  Serial.print("\tVoltage: ");
+  Serial.println(Voltage, 4);
+  Serial.println(Do, 4);
+  
+  Serial.println("------");
+
+}
